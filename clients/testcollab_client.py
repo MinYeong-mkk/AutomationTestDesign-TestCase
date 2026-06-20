@@ -46,3 +46,36 @@ class TestCollabClient:
         response = requests.post(url, params=self._params(), json=body)
         response.raise_for_status()
         return response.json()
+
+    def create_suite(self, title: str, parent_id: int = None) -> dict:
+        url = f"{self.base_url}/suites"
+        body = {"project": int(self.project_id), "title": title}
+        if parent_id:
+            body["parent"] = parent_id
+        response = requests.post(url, params=self._params(), json=body)
+        response.raise_for_status()
+        return response.json()
+
+    def upload_tc_draft(self, tc_list: list, suite_id: int) -> list:
+        """tc_draft 목록을 TestCollab에 일괄 업로드. 생성된 TC 정보 목록 반환."""
+        results = []
+        for tc in tc_list:
+            pre_condition = tc.get("pre_condition", [])
+            if isinstance(pre_condition, list):
+                pre_condition = "\n".join(pre_condition)
+
+            try:
+                result = self.create_test_case(
+                    title=tc.get("title", ""),
+                    description=tc.get("description", ""),
+                    pre_condition=pre_condition,
+                    steps=tc.get("steps", []),
+                    suite_id=suite_id,
+                    priority=tc.get("priority", "Normal")
+                )
+                results.append({"title": tc.get("title", ""), "id": result.get("id"), "status": "ok"})
+                print(f"  ✓ 업로드: {tc.get('title', '')}")
+            except Exception as e:
+                results.append({"title": tc.get("title", ""), "status": "fail", "error": str(e)})
+                print(f"  ✗ 실패: {tc.get('title', '')} → {e}")
+        return results

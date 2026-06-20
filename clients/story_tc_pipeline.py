@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 from .jira_client import JiraClient
 from .confluence_client import ConfluenceClient
+from .testcollab_client import TestCollabClient
 from .utils import ai_client as ai
 from .utils.html_builder import page_header, section, table, info_panel
 
@@ -97,7 +98,7 @@ JSON 형식으로만 응답하세요:
 
 # ── 2. TC 산출물 생성 ─────────────────────────────────────────────────────────
 
-def generate_test_design_artifacts(stories: list, confluence_spec: str = "") -> dict:
+def generate_test_design_artifacts(stories: list, confluence_spec: str = "", figma_images: list = None) -> dict:
     stories_text = "\n\n".join(
         f"[{s.get('key', '')}] {s.get('summary', '')}\n{s.get('description', '(설명 없음)')}"
         for s in stories
@@ -105,6 +106,16 @@ def generate_test_design_artifacts(stories: list, confluence_spec: str = "") -> 
 
     spec_section = confluence_spec[:6000] if confluence_spec else "(Confluence Spec 없음)"
     checklist_text = _format_checklist_template()
+
+    figma_section = ""
+    if figma_images:
+        screen_names = "\n".join(f"- {img['description']}" for img in figma_images)
+        figma_section = f"""
+## Figma 화면 (첨부 이미지 참고)
+{screen_names}
+(첨부된 실제 화면 이미지를 참고하여 UI/UX 체크리스트 및 TC Step을 구체화하세요.
+ 버튼 명칭, 입력 필드, 팝업, 오류 메시지 등 실제 화면 요소를 기반으로 작성합니다.)
+"""
 
     prompt = f"""
     당신은 Senior QA Engineer입니다.
@@ -126,7 +137,7 @@ def generate_test_design_artifacts(stories: list, confluence_spec: str = "") -> 
 
     ## Confluence Spec
     {spec_section}
-
+    {figma_section}
     ## 회사 Checklist Template
     {checklist_text}
 
@@ -269,7 +280,7 @@ def generate_test_design_artifacts(stories: list, confluence_spec: str = "") -> 
     }}
     """
 
-    return ai.chat_json(prompt, max_tokens=8000)
+    return ai.chat_json(prompt, max_tokens=8000, images=figma_images or None)
 
 def normalize_test_design_artifacts(artifacts: dict) -> dict:
     if not isinstance(artifacts, dict):
@@ -607,6 +618,74 @@ def _load_confluence_specs(confluence: ConfluenceClient) -> str:
     return "\n\n".join(contents)
 
 
+# ── 4-1. Figma 화면 로드 헬퍼 ────────────────────────────────────────────────
+
+def _load_figma_screens() -> list:
+    from .figma_client import FigmaClient
+    try:
+        figma = FigmaClient()
+    except ValueError as e:
+        print(f"  Figma 연결 불가: {e}")
+        return []
+
+    print("\nFigma 파일 URL 또는 file_key 입력:")
+    print("예시: https://www.figma.com/design/ABC123/My-File?node-id=1-2")
+    url = input("Figma URL: ").strip()
+    if not url:
+        return []
+
+    try:
+        return figma.fetch_screens(url)
+    except Exception as e:
+        print(f"  Figma 로드 실패 (계속 진행): {e}")
+        return []
+
+
+# ── 4-2. TestCollab Suite 선택 헬퍼 ─────────────────────────────────────────
+
+def _select_testcollab_suite(tc_client: TestCollabClient) -> int:
+    print("\nTestCollab Suite 조회 중...")
+    try:
+        suites = tc_client.get_suites()
+    except Exception as e:
+        print(f"  Suite 조회 실패: {e}")
+        suite_id = input("  Suite ID 직접 입력 (없으면 빈 줄): ").strip()
+        return int(suite_id) if suite_id.isdigit() else None
+
+    if not suites:
+        print("  Suite가 없어요. 새 Suite를 생성합니다.")
+        name = input("  새 Suite 이름: ").strip()
+        if not name:
+            return None
+        result = tc_client.create_suite(name)
+        return result.get("id")
+
+    print("\n=== TestCollab Suite 목록 ===")
+    for i, s in enumerate(suites[:30], 1):
+        print(f"  {i}. [{s.get('id')}] {s.get('title', '')}")
+    print("  N. 새 Suite 생성")
+
+    choice = input("\nSuite 번호 선택 (또는 N): ").strip()
+
+    if choice.upper() == "N":
+        name = input("  새 Suite 이름: ").strip()
+        if not name:
+            return None
+        result = tc_client.create_suite(name)
+        print(f"  Suite 생성 완료: [{result.get('id')}] {name}")
+        return result.get("id")
+
+    if choice.isdigit():
+        idx = int(choice) - 1
+        if 0 <= idx < len(suites):
+            selected = suites[idx]
+            print(f"  선택된 Suite: [{selected.get('id')}] {selected.get('title', '')}")
+            return selected.get("id")
+
+    print("  잘못된 선택. TestCollab 업로드를 건너뜁니다.")
+    return None
+
+
 # ── 5. 메인 파이프라인 ────────────────────────────────────────────────────────
 
 def run_tc_pipeline():
@@ -614,16 +693,23 @@ def run_tc_pipeline():
 
     jira = JiraClient()
     confluence = ConfluenceClient()
+    tc_client = TestCollabClient()
     space_key = os.getenv("CONFLUENCE_SPACE_KEY")
     parent_id = os.getenv("CONFLUENCE_PARENT_PAGE_ID")
 
-    # Step 1. 컨플 스펙 입력 (선택)
+    # Step 1. Figma 화면 입력 (선택)
+    figma_images = []
+    use_figma = input("Figma 화면을 참고할까요? (y/n): ").strip().lower()
+    if use_figma == "y":
+        figma_images = _load_figma_screens()
+
+    # Step 2. 컨플 스펙 입력 (선택)
     confluence_spec = ""
-    use_spec = input("Confluence 스펙 페이지를 참고할까요? (y/n): ").strip().lower()
+    use_spec = input("\nConfluence 스펙 페이지를 참고할까요? (y/n): ").strip().lower()
     if use_spec == "y":
         confluence_spec = _load_confluence_specs(confluence)
 
-    # Step 2. Jira 스토리 입력 (선택)
+    # Step 3. Jira 스토리 입력 (선택)
     use_jira = input("\nJira 스토리도 참고할까요? (y/n): ").strip().lower()
     stories = []
     if use_jira == "y":
@@ -635,11 +721,18 @@ def run_tc_pipeline():
             stories = jira.get_stories(jql_or_url)
             print(f"총 {len(stories)}개 스토리 조회됨")
 
-    if not stories and not confluence_spec:
-        print("스펙이나 스토리 중 하나는 입력해야 해요.")
+    if not stories and not confluence_spec and not figma_images:
+        print("Figma / Confluence 스펙 / Jira 스토리 중 하나는 입력해야 해요.")
         return
 
-    # Step 3. 스토리 있으면 AI 그룹 분류 → 그룹 선택
+    # Step 4. TestCollab Suite 선택 (시작 시 한 번)
+    suite_id = _select_testcollab_suite(tc_client)
+    if suite_id:
+        print(f"  TestCollab Suite ID {suite_id} → TC 생성 후 자동 업로드됩니다.")
+    else:
+        print("  TestCollab 업로드 없이 진행합니다.")
+
+    # Step 5. 스토리 있으면 AI 그룹 분류 → 그룹 선택
     if stories:
         print("\nAI가 기능 그룹 분류 중...")
         groups = classify_stories(stories)
@@ -652,10 +745,9 @@ def run_tc_pipeline():
         choice = input("\n작업할 그룹 번호 선택 (전체는 0): ").strip()
         selected_groups = group_list if choice == "0" else [group_list[int(choice) - 1]]
     else:
-        # 스토리 없이 컨플 스펙만으로 → 그룹 없이 단일 처리
         selected_groups = [("스펙 기반 TC", [])]
 
-    # Step 4. 그룹별 스토리 본문 조회 → 산출물 생성 → 컨플 저장
+    # Step 6. 그룹별 처리
     for group_name, keys in selected_groups:
         print(f"\n[{group_name}] 처리 중...")
 
@@ -671,8 +763,7 @@ def run_tc_pipeline():
                     group_stories.append(s)
 
         print("  AI Test Design 생성 중...")
-        artifacts = generate_test_design_artifacts(group_stories, confluence_spec)
-
+        artifacts = generate_test_design_artifacts(group_stories, confluence_spec, figma_images or None)
         artifacts = normalize_test_design_artifacts(artifacts)
 
         print("\n========== AI RESULT ==========")
@@ -680,40 +771,50 @@ def run_tc_pipeline():
         print("========== END ==========\n")
 
         checklist_matrix = artifacts.get("checklist_matrix", {})
-
-        if isinstance(checklist_matrix, dict):
-            checklist_count = sum(len(items) for items in checklist_matrix.values())
-        else:
-            checklist_count = len(checklist_matrix)
-
-        print(
-            f"  → Checklist {checklist_count}개 / "
-            f"TC Draft {len(artifacts.get('tc_draft', []))}개 생성"
+        checklist_count = (
+            sum(len(items) for items in checklist_matrix.values())
+            if isinstance(checklist_matrix, dict)
+            else len(checklist_matrix)
         )
+        tc_draft = artifacts.get("tc_draft", [])
+        print(f"  → Checklist {checklist_count}개 / TC Draft {len(tc_draft)}개 생성")
 
+        # Confluence 저장
         save = input(f"  Confluence에 저장할까요? (y/n): ").strip().lower()
         if save == "y":
             now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
             design_html = build_test_design_page(group_name, group_stories, artifacts)
-            design_title = f"[Test Design] {group_name} ({now})"
             design_link = confluence.create_page(
                 space_key,
-                design_title,
+                f"[Test Design] {group_name} ({now})",
                 design_html,
                 parent_id=parent_id
             )
 
             tc_html = build_tc_draft_page(group_name, group_stories, artifacts)
-            tc_title = f"[TC Draft] {group_name} ({now})"
             tc_link = confluence.create_page(
                 space_key,
-                tc_title,
+                f"[TC Draft] {group_name} ({now})",
                 tc_html,
                 parent_id=parent_id
             )
 
             print(f"  ✓ Test Design 저장 완료: {design_link}")
             print(f"  ✓ TC Draft 저장 완료: {tc_link}")
+
+            # TestCollab 업로드 (Confluence 확인 후 별도 승인)
+            if suite_id and tc_draft:
+                print(f"\n  Confluence에서 TC를 확인한 후 TestCollab에 업로드하세요.")
+                print(f"  TC Draft 링크: {tc_link}")
+                upload = input(f"  TestCollab에 업로드할까요? (y/n): ").strip().lower()
+                if upload == "y":
+                    print(f"  TestCollab 업로드 중 ({len(tc_draft)}개)...")
+                    results = tc_client.upload_tc_draft(tc_draft, suite_id)
+                    ok = sum(1 for r in results if r.get("status") == "ok")
+                    fail = len(results) - ok
+                    print(f"  ✓ TestCollab 업로드 완료: 성공 {ok}개 / 실패 {fail}개")
+                else:
+                    print("  TestCollab 업로드를 건너뜁니다.")
 
     print("\n=== 완료 ===")
