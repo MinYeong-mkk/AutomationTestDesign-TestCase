@@ -3,77 +3,9 @@ import json
 from datetime import datetime
 from .jira_client import JiraClient
 from .confluence_client import ConfluenceClient
-from .testcollab_client import TestCollabClient
+from .checklist_data import CHECKLIST_TEMPLATE, format_checklist
 from .utils import ai_client as ai
-from .utils.html_builder import page_header, section, table, info_panel
-
-#----CheckList Template-----
-CHECKLIST_TEMPLATE = [
-    # Functional
-    ("Functional", "요청한 기능이 지정된 동작을 정확히 수행하는가?"),
-    ("Functional", "입력값에 따른 출력값이 정확하게 일치하는가?"),
-    ("Functional", "사용자 유형에 따른 화면 노출/기능 제한이 정확히 적용되는가?"),
-    ("Functional", "이벤트 발생이 명확한 조건으로 정확하게 발생하는가?"),
-    ("Functional", "실무에서 예상되는 케이스가 모두 반영되어 있는가?"),
-    ("Functional", "요구된 모든 기능이 누락 없이 구현되었는가?"),
-
-    # Non-Functional
-    ("Non-Functional", "응답 시간이 요구 성능 기준을 충족하는가?"),
-    ("Non-Functional", "동시 사용자 수 증가 시 성능 저하 없이 동작하는가?"),
-    ("Non-Functional", "대용량 데이터 처리 시에도 시스템 처리 성능이 저하되지 않는가?"),
-    ("Non-Functional", "인증 및 권한 검증이 적절히 수행되는가?"),
-    ("Non-Functional", "암호화된 데이터 전송이 이루어지는가?"),
-    ("Non-Functional", "세션 관리 및 만료 처리가 적절한가?"),
-    ("Non-Functional", "오류 발생 시 시스템이 자동 복구 가능한가?"),
-    ("Non-Functional", "외부 시스템 장애 시 대응이 적절한가?"),
-
-    # UI/UX
-    ("UI/UX", "사용자가 기능을 이해할 수 있도록, 필요한 위치에 명확하고 일관된 안내 정보가 제공되는가?"),
-    ("UI/UX", "메뉴/버튼의 의미가 명확하고 직관적인가?"),
-    ("UI/UX", "필수 입력 항목이 시각적으로 잘 구분되는가?"),
-    ("UI/UX", "아이콘 및 버튼(폰트, 색상, 정렬 등)이 일관적으로 통일되어 있는가?"),
-    ("UI/UX", "디자인이 화면 해상도별로 동일한 시각 체계를 제공하는가?"),
-
-    # Integration
-    ("Integration", "모듈 간 데이터가 정상적으로 전달되는가?"),
-    ("Integration", "데이터 중복이나 손실 없이 처리되는가?"),
-    ("Integration", "외부 시스템 연동 시 데이터 일관성이 유지되는가?"),
-    ("Integration", "시스템 구성 요소 변경 시, 통합 시스템의 기능 흐름에 정상 반영되는가?"),
-
-    # Common
-    ("Common", "버그 수정 후에도 기존 오류가 재발하지 않는가?"),
-    ("Common", "테스트 자동화를 통해 반복 회귀 검증이 수행되는가?"),
-    ("Common", "수정된 기능 외 다른 기능에 영향이 없는가?"),
-    ("Common", "다양한 운영체제에서 기능의 차이 없이 동작하는가?"),
-    ("Common", "다양한 모바일 환경에서 기능의 차이 없이 동작하는가?"),
-    ("Common", "다양한 브라우저에서 기능의 차이 없이 동작하는가?"),
-    ("Common", "다양한 입력 도구(터치, 키보드 등)에서 잘 동작하는가?"),
-    ("Common", "요청 API가 명세서대로 응답 형식과 코드를 반환하는가?"),
-    ("Common", "필수 파라미터 누락 시, 적절한 오류 반환이 이루어지는가?"),
-    ("Common", "API 호출 실패 시, 적절한 오류 코드와 메시지를 반환하는가?"),
-
-    # Exceptional Handling
-    ("Exceptional Handling", "필수 항목이 빠진 상태에서 저장 또는 제출 시, 사용자에게 명확한 오류 메시지가 제공되는가?"),
-    ("Exceptional Handling", "비정상 입력값에 대해 유효성 검사 및 오류 메시지가 제공되는가?"),
-    ("Exceptional Handling", "데이터 처리 중 예외 발생 시, 전체 시스템이 중단되지 않고 안정적으로 동작을 유지하는가?"),
-
-    # Technical Quality Assurance
-    ("Technical Quality Assurance", "일정 트래픽 이상 시 서버가 안정적으로 처리 가능한가?"),
-    ("Technical Quality Assurance", "대규모 요청으로 지속적인 부하 발생 시, 시스템 응답이 지연 없이 처리되는가?"),
-    ("Technical Quality Assurance", "서버 오류 발생 시 자동 리트라이 또는 대체 처리 흐름이 있는가?"),
-    ("Technical Quality Assurance", "불안정한 네트워크 환경에서 오류 없이 작동하는가?"),
-    ("Technical Quality Assurance", "네트워크 비연결 상태에서도 기능이 적절히 제한되는가?"),
-    ("Technical Quality Assurance", "연결 해제 후 복원 시 세션이나 데이터가 손상되지 않는가?"),
-    ("Technical Quality Assurance", "동기화 기능이 불안정한 상황에서도 데이터 유실 없이 처리되는가?"),
-    ("Technical Quality Assurance", "다른 앱과 동시 실행 시 앱 충돌이나 동작 오류가 없는가?"),
-]
-
-
-def _format_checklist_template() -> str:
-    return "\n".join(
-        f"- [{category}] {item}"
-        for category, item in CHECKLIST_TEMPLATE
-    )
+from .utils.html_builder import build_test_design_page, build_tc_draft_page
 
 # ── 1. AI 그룹 분류 ───────────────────────────────────────────────────────────
 
@@ -93,7 +25,7 @@ JSON 형식으로만 응답하세요:
   "그룹명2": ["STORY-3"]
 }}
 """
-    return ai.chat_json(prompt)
+    return ai.chat_json(prompt, max_tokens=2000)
 
 
 # ── 2. TC 산출물 생성 ─────────────────────────────────────────────────────────
@@ -104,183 +36,146 @@ def generate_test_design_artifacts(stories: list, confluence_spec: str = "", fig
         for s in stories
     ) or "(Jira Story 없음)"
 
-    spec_section = confluence_spec[:6000] if confluence_spec else "(Confluence Spec 없음)"
-    checklist_text = _format_checklist_template()
+    spec_section = confluence_spec[:12000] if confluence_spec else "(Confluence Spec 없음)"
+    checklist_text = format_checklist()
+    checklist_total = len(CHECKLIST_TEMPLATE)
 
     figma_section = ""
     if figma_images:
         screen_names = "\n".join(f"- {img['description']}" for img in figma_images)
         figma_section = f"""
-## Figma 화면 (첨부 이미지 참고)
+## Figma 화면 ({len(figma_images)}개 이미지 첨부됨)
 {screen_names}
-(첨부된 실제 화면 이미지를 참고하여 UI/UX 체크리스트 및 TC Step을 구체화하세요.
- 버튼 명칭, 입력 필드, 팝업, 오류 메시지 등 실제 화면 요소를 기반으로 작성합니다.)
+
+[Figma 이미지 분석 필수 지시]
+- 첨부된 이미지에서 실제 버튼 레이블, 입력 필드명, 팝업 제목, 오류 메시지 문구를 직접 인용하여 TC Step에 사용할 것
+- UI/UX 체크리스트 항목 평가 시 이미지에서 관찰된 실제 화면 구성을 근거로 작성할 것
+- 화면에 보이는 플로우(버튼 클릭 → 다음 화면 → 결과)를 TC Step 흐름에 반영할 것
 """
 
     prompt = f"""
-    당신은 Senior QA Engineer입니다.
-    회사 Test Design Template 기준으로
-    요구사항 분석 및 테스트 설계를 수행하세요.
-    모든 출력은 한국어로 작성한다. 단, 제품명/버튼명/화면 문구/영문 스펙 문구는 원문 그대로 유지한다.
+당신은 10년 이상 경력의 Senior QA Engineer입니다.
+아래 입력 자료를 분석하여 고품질 Test Design 산출물을 작성하세요.
+모든 출력은 한국어로 작성한다. 단, 제품명/버튼명/화면 문구/영문 스펙 문구는 원문 그대로 유지한다.
 
-    출력 분량 규칙
-    - Checklist Template의 모든 항목을 평가한다.
-    - 해당 없는 경우:
-    applicable=false
-    reason="해당없음 - 사유"
+================================================
+입력 자료
+================================================
 
-    - tc_draft는 기능 복잡도에 따라 작성한다.
-    - 복합 기능(AuraVue, 결제, 구독, 외부 연동 등)은 Scenario 단위로 작성한다.
+## Jira Story
+{stories_text}
 
-    ## Jira Story
-    {stories_text}
+## Confluence Spec
+{spec_section}
+{figma_section}
+## 회사 Checklist Template ({checklist_total}개)
+{checklist_text}
 
-    ## Confluence Spec
-    {spec_section}
-    {figma_section}
-    ## 회사 Checklist Template
-    {checklist_text}
+================================================
+[CRITICAL] Checklist 평가 규칙
+================================================
 
-    ==================================================
-    Checklist 평가 규칙
-    ==================================================
+**반드시 위 Checklist Template {checklist_total}개 항목을 빠짐없이 전부 평가해야 한다.**
+- checklist_matrix 배열의 원소 수 = 정확히 {checklist_total}개
+- 단 하나도 누락하면 안 된다
+- 항목 추가/변경/병합 금지 — Template 원문 그대로 사용
+- spec 정보가 부족한 항목은 spec_review_required=true, reason에 부족한 이유 기재
+- 해당 없는 항목: applicable=false, reason="해당없음 - [구체적 사유]"
+- 해당 항목: applicable=true, test_case_design에 구체적인 검증 방법 기재
 
-    - spec 정보가 부족하면 spec_review_required=true
-    - checklist_matrix는 리스트로 작성한다.
-    - 추가 Checklist 생성 금지
+각 항목 필수 필드:
+  category / checklist / applicable / related_feature / reason / spec_review_required / test_case_design
 
-    각 항목은 반드시 아래 필드를 포함한다.
+================================================
+[CRITICAL] TC Draft 작성 규칙
+================================================
 
-    category
-    checklist
-    applicable
-    related_feature
-    reason
-    spec_review_required
-    test_case_design
+**tc_draft는 반드시 최소 10개 이상의 Scenario를 작성한다.**
+- 입력 스토리가 복잡하거나 화면이 다양한 경우 15개 이상 작성
+- 기능 단위 TC 생성 금지 — 실제 사용자의 End-to-End 업무 흐름으로 작성
+- 하나의 Scenario는 반드시 8~15 Step으로 작성 (5개 이하 절대 금지)
+- 각 Step은 "1. [구체적 행동]" 형태로 작성하고, expected_result도 구체적으로 기술
+- Validation, Permission, Error Handling, Notification, Integration 등은 해당 Scenario에 자연스럽게 연관될 때만 Step에 포함
+- Figma 이미지가 있으면 실제 화면의 버튼명/레이블/팝업을 Step에 직접 인용
+- 실제 QA가 즉시 실행 가능한 수준으로 작성
 
-    ==================================================
-    문서 작성 규칙
-    ==================================================
+================================================
+문서 작성 규칙
+================================================
 
-    1. Requirement Summary
-    2. Test Scope
-    3. Checklist Matrix
-    4. Risk Analysis
-    5. Mindmap
-    6. Flowchart
-    7. TC Draft
+1. Requirement Summary — 기능명, 목적, 영향 모듈, 사용자 유형, 변경 유형
+2. Test Scope — In Scope / Out of Scope 명확히 구분 (각 최소 5개)
+3. Checklist Matrix — {checklist_total}개 전체 평가
+4. Risk Analysis — 최소 5개 이상, impact 근거 포함
+5. Mindmap — Mermaid mindmap 문법, TC 대상 기능 중심
+6. Flowchart — Mermaid flowchart TD, 주요 사용자 플로우 전체 표현
+7. TC Draft — 최소 10개 Scenario
 
-    ==================================================
-    Mindmap 규칙
-    ==================================================
+================================================
+출력 규칙
+================================================
 
-    - Mermaid mindmap 문법 사용
-    - 실제 TC 작성 대상만 포함
+JSON 외 텍스트 출력 금지.
+반드시 아래 스키마 JSON으로만 응답한다.
 
-    ==================================================
-    Flowchart 규칙
-    ==================================================
-
-    - Mermaid flowchart TD 사용
-    - 주요 사용자 플로우만 표현
-
-    ==================================================
-    TC Draft 규칙
-    ==================================================
-
-    - 기능 단위 TC 생성 금지
-    - 실제 사용자의 End-to-End 업무 흐름으로 작성한다.
-    - 하나의 Scenario는 일반적으로 8~15 Step으로 작성한다.
-    - Notification, Email, Validation, Permission, Error Handling, Integration 검증을 Scenario 내부 Step에 포함한다.
-    - 실제 QA가 즉시 실행 가능한 수준으로 작성한다.
-    - TestCollab 업로드 가능한 수준으로 작성한다.
-
-    ==================================================
-    출력 규칙
-    ==================================================
-
-    JSON 외 텍스트 출력 금지
-    반드시 아래 스키마와 동일한 JSON으로 응답한다.
-
-    style_mode
-    split_recommendation
-    requirement_summary
-    test_scope
-    checklist_matrix
-    risk_analysis
-    mindmap_mermaid
-    flowchart_mermaid
-    tc_draft
-
-    JSON 예시
-
+{{
+  "style_mode": "detailed",
+  "split_recommendation": {{
+    "required": false,
+    "reason": ""
+  }},
+  "requirement_summary": {{
+    "feature_name": "",
+    "purpose": "",
+    "affected_modules": [],
+    "user_types": [],
+    "change_type": ""
+  }},
+  "test_scope": {{
+    "in_scope": [],
+    "out_scope": []
+  }},
+  "checklist_matrix": [
     {{
-    "style_mode": "detailed",
-
-    "split_recommendation": {{
-        "required": false,
-        "reason": ""
-    }},
-
-    "requirement_summary": {{
-        "feature_name": "",
-        "purpose": "",
-        "affected_modules": [],
-        "user_types": [],
-        "change_type": ""
-    }},
-
-    "test_scope": {{
-        "in_scope": [],
-        "out_scope": []
-    }},
-
-    "checklist_matrix": [
-        {{
-        "category": "Functional",
-        "checklist": "",
-        "applicable": true,
-        "related_feature": "",
-        "reason": "",
-        "spec_review_required": false,
-        "test_case_design": ""
-        }}
-    ],
-
-    "risk_analysis": [
-        {{
-        "risk": "",
-        "impact": "High",
-        "mitigation": ""
-        }}
-    ],
-
-    "mindmap_mermaid": "",
-
-    "flowchart_mermaid": "",
-
-    "tc_draft": [
-        {{
-        "scenario": "",
-        "description": "",
-        "priority": "High",
-        "pre_condition": [],
-        "jira_keys": [],
-        "test_data": [],
-        "note": "",
-        "steps": [
-            {{
-            "step": "",
-            "expected_result": ""
-            }}
-        ]
-        }}
-    ]
+      "category": "Functional",
+      "checklist": "",
+      "applicable": true,
+      "related_feature": "",
+      "reason": "",
+      "spec_review_required": false,
+      "test_case_design": ""
     }}
-    """
+  ],
+  "risk_analysis": [
+    {{
+      "risk": "",
+      "impact": "High",
+      "mitigation": ""
+    }}
+  ],
+  "mindmap_mermaid": "",
+  "flowchart_mermaid": "",
+  "tc_draft": [
+    {{
+      "scenario": "",
+      "description": "",
+      "priority": "High",
+      "pre_condition": [],
+      "jira_keys": [],
+      "test_data": [],
+      "note": "",
+      "steps": [
+        {{
+          "step": "",
+          "expected_result": ""
+        }}
+      ]
+    }}
+  ]
+}}
+"""
 
-    return ai.chat_json(prompt, max_tokens=8000, images=figma_images or None)
+    return ai.chat_json(prompt, max_tokens=16000, images=figma_images or None)
 
 def normalize_test_design_artifacts(artifacts: dict) -> dict:
     if not isinstance(artifacts, dict):
@@ -378,229 +273,7 @@ def normalize_test_design_artifacts(artifacts: dict) -> dict:
 
     return artifacts
 
-# ── 3. Confluence 페이지 빌더 ─────────────────────────────────────────────────
-
-def build_test_design_page(group_name: str, stories: list, artifacts: dict) -> str:
-    summary = artifacts.get("requirement_summary", {})
-    if isinstance(summary, str):
-        summary = {
-            "feature_name": group_name,
-            "purpose": summary,
-            "change_type": "",
-            "affected_modules": [],
-            "user_types": [],
-        }
-
-    scope = artifacts.get("test_scope", {})
-
-    if isinstance(scope, str):
-        scope = {
-            "in_scope": [scope],
-            "out_scope": [],
-        }
-    elif isinstance(scope, list):
-        scope = {
-            "in_scope": scope,
-            "out_scope": [],
-        }
-    elif not isinstance(scope, dict):
-        scope = {
-            "in_scope": [],
-            "out_scope": [],
-        }
-
-    split = artifacts.get("split_recommendation", {})
-    if isinstance(split, bool):
-        split = {
-            "required": split,
-            "reason": "",
-            "suggested_documents": [],
-        }
-    elif isinstance(split, str):
-        split = {
-            "required": True,
-            "reason": split,
-            "suggested_documents": [],
-        }
-
-    summary_html = f"""
-<p><strong>기능명:</strong> {summary.get("feature_name", "")}</p>
-<p><strong>목적:</strong> {summary.get("purpose", "")}</p>
-<p><strong>변경 유형:</strong> {summary.get("change_type", "")}</p>
-<p><strong>영향 모듈:</strong> {", ".join(summary.get("affected_modules", []))}</p>
-<p><strong>사용자 유형:</strong> {", ".join(summary.get("user_types", []))}</p>
-"""
-
-    scope_html = f"""
-<h4>In Scope</h4>
-<ul>
-{''.join(f"<li>{item}</li>" for item in scope.get("in_scope", []))}
-</ul>
-
-<h4>Out of Scope</h4>
-<ul>
-{''.join(f"<li>{item}</li>" for item in scope.get("out_scope", []))}
-</ul>
-"""
-
-    split_html = f"""
-<p><strong>Style Mode:</strong> {artifacts.get("style_mode", "")}</p>
-<p><strong>분리 필요:</strong> {"Y" if split.get("required") else "N"}</p>
-<p><strong>사유:</strong> {split.get("reason", "")}</p>
-<ul>
-{''.join(f"<li>{item}</li>" for item in split.get("suggested_documents", []))}
-</ul>
-"""
-
-    story_rows = [[s.get("key", ""), s.get("summary", "")] for s in stories]
-    story_table = table(["스토리 키", "제목"], story_rows) if story_rows else "<p>Jira Story 없음</p>"
-
-    checklist_rows = []
-    checklist_matrix = artifacts.get("checklist_matrix", {})
-
-    if isinstance(checklist_matrix, dict):
-        for category, items in checklist_matrix.items():
-            for item in items:
-                checklist_rows.append([
-                    category,
-                    item.get("checklist") or item.get("item", ""),
-                    "Y" if item.get("applicable", item.get("evaluation", False)) else "N",
-                    item.get("related_feature", ""),
-                    item.get("reason", ""),
-                    "Y" if item.get("spec_review_required", False) else "N",
-                    item.get("test_case_design", "")
-                ])
-    else:
-        for item in checklist_matrix:
-            checklist_rows.append([
-                item.get("category", ""),
-                item.get("checklist", ""),
-                "Y" if item.get("applicable", False) else "N",
-                item.get("related_feature", ""),
-                item.get("reason", ""),
-                "Y" if item.get("spec_review_required", False) else "N",
-                item.get("test_case_design", "")
-            ])
-
-    checklist_table = table(
-        [
-            "필수 요소",
-            "체크리스트",
-            "적용",
-            "관련 기능",
-            "미적용 사유/판단 사유",
-            "Spec 검토 필요",
-            "Test Case 구성 정보"
-        ],
-        checklist_rows
-    )
-
-    coverage_rows = [
-        [
-            c.get("feature", ""),
-            c.get("checklist_category", ""),
-            c.get("test_type", ""),
-            c.get("tc_id", "")
-        ]
-        for c in artifacts.get("coverage_matrix", [])
-    ]
-
-    coverage_table = table(
-        ["Feature", "Checklist Category", "Test Type", "TC ID"],
-        coverage_rows
-    ) if coverage_rows else "<p>Coverage Matrix 없음</p>"
-
-    risk_rows = [
-        [
-            r.get("risk", ""),
-            r.get("impact", ""),
-            r.get("mitigation", "")
-        ]
-        for r in artifacts.get("risk_analysis", [])
-    ]
-
-    risk_table = table(
-        ["Risk", "Impact", "Mitigation"],
-        risk_rows
-    ) if risk_rows else "<p>Risk 없음</p>"
-
-    mindmap = artifacts.get("mindmap_mermaid", "")
-    flowchart = artifacts.get("flowchart_mermaid", "")
-
-    output_html = f"""
-<h4>Mindmap Mermaid</h4>
-<pre>{mindmap}</pre>
-
-<h4>Flowchart Mermaid</h4>
-<pre>{flowchart}</pre>
-"""
-
-    return (
-        page_header(f"[Test Design] {group_name}", "회사 Test Design Template 기반 자동 생성")
-        + section("문서 정보", "<p><strong>담당자:</strong> </p><p><strong>작성일/최종 수정일:</strong> </p>")
-        + section("테스트 개요", summary_html)
-        + section("Test Scope", scope_html)
-        + section("문서 분리 판단", split_html)
-        + section("Jira 정보", story_table)
-        + section("Test Case 설계", checklist_table)
-        + section("Coverage Matrix", coverage_table)
-        + section("Risk Analysis", risk_table)
-        + section("산출물", output_html)
-        + info_panel("AI가 생성한 Test Design 초안입니다. QA 검토 후 최종 확정하세요.")
-    )
-
-def build_tc_draft_page(group_name: str, stories: list, artifacts: dict) -> str:
-    tc_rows = []
-
-    for tc in artifacts.get("tc_draft", []):
-        pre_condition = tc.get("pre_condition", "")
-        if isinstance(pre_condition, list):
-            pre_condition = "<br/>".join(pre_condition)
-
-        steps = tc.get("steps", [])
-        if not steps:
-            tc_rows.append([
-                tc.get("title", ""),
-                "",
-                pre_condition,
-                "",
-                "",
-                tc.get("description", ""),
-                ""
-            ])
-            continue
-
-        for idx, step in enumerate(steps):
-            tc_rows.append([
-                tc.get("title", "") if idx == 0 else "",
-                tc.get("type", "") if idx == 0 else "",
-                pre_condition if idx == 0 else "",
-                step.get("step", ""),
-                step.get("expected_result", ""),
-                tc.get("description", "") if idx == 0 else "",
-                ", ".join(s.get("key", "") for s in stories) if idx == 0 else ""
-            ])
-
-    tc_table = table(
-        [
-            "Depth1",
-            "Depth2",
-            "Pre-condition",
-            "Step",
-            "Expected Result",
-            "Note",
-            "JIRA"
-        ],
-        tc_rows
-    ) if tc_rows else "<p>생성된 TC Draft 없음</p>"
-
-    return (
-        page_header(f"[TC Draft] {group_name}", "TestCollab 이관용 TC Draft")
-        + section("Test Cases", tc_table)
-        + info_panel("AI가 생성한 TC Draft 초안입니다. QA 검토 후 TestCollab으로 이관하세요.")
-    )
-
-# ── 4. 컨플 스펙 로드 헬퍼 ───────────────────────────────────────────────────
+# ── 3. 입력 수집 / 그룹 처리 ─────────────────────────────────────────────────
 
 def _load_confluence_specs(confluence: ConfluenceClient) -> str:
     print("\nConfluence 스펙 페이지 URL 입력 (빈 줄로 완료):")
@@ -641,78 +314,20 @@ def _load_figma_screens() -> list:
         return []
 
 
-# ── 4-2. TestCollab Suite 선택 헬퍼 ─────────────────────────────────────────
-
-def _select_testcollab_suite(tc_client: TestCollabClient) -> int:
-    print("\nTestCollab Suite 조회 중...")
-    try:
-        suites = tc_client.get_suites()
-    except Exception as e:
-        print(f"  Suite 조회 실패: {e}")
-        suite_id = input("  Suite ID 직접 입력 (없으면 빈 줄): ").strip()
-        return int(suite_id) if suite_id.isdigit() else None
-
-    if not suites:
-        print("  Suite가 없어요. 새 Suite를 생성합니다.")
-        name = input("  새 Suite 이름: ").strip()
-        if not name:
-            return None
-        result = tc_client.create_suite(name)
-        return result.get("id")
-
-    print("\n=== TestCollab Suite 목록 ===")
-    for i, s in enumerate(suites[:30], 1):
-        print(f"  {i}. [{s.get('id')}] {s.get('title', '')}")
-    print("  N. 새 Suite 생성")
-
-    choice = input("\nSuite 번호 선택 (또는 N): ").strip()
-
-    if choice.upper() == "N":
-        name = input("  새 Suite 이름: ").strip()
-        if not name:
-            return None
-        result = tc_client.create_suite(name)
-        print(f"  Suite 생성 완료: [{result.get('id')}] {name}")
-        return result.get("id")
-
-    if choice.isdigit():
-        idx = int(choice) - 1
-        if 0 <= idx < len(suites):
-            selected = suites[idx]
-            print(f"  선택된 Suite: [{selected.get('id')}] {selected.get('title', '')}")
-            return selected.get("id")
-
-    print("  잘못된 선택. TestCollab 업로드를 건너뜁니다.")
-    return None
-
-
 # ── 5. 메인 파이프라인 ────────────────────────────────────────────────────────
 
-def run_tc_pipeline():
-    print("\n=== TC 산출물 생성 ===")
-
-    jira = JiraClient()
-    confluence = ConfluenceClient()
-    tc_client = TestCollabClient()
-    space_key = os.getenv("CONFLUENCE_SPACE_KEY")
-    parent_id = os.getenv("CONFLUENCE_PARENT_PAGE_ID")
-
-    # Step 1. Figma 화면 입력 (선택)
+def _collect_inputs(jira: JiraClient, confluence: ConfluenceClient) -> tuple:
+    """사용자 입력 수집. (figma_images, confluence_spec, stories) 반환."""
     figma_images = []
-    use_figma = input("Figma 화면을 참고할까요? (y/n): ").strip().lower()
-    if use_figma == "y":
+    if input("Figma 화면을 참고할까요? (y/n): ").strip().lower() == "y":
         figma_images = _load_figma_screens()
 
-    # Step 2. 컨플 스펙 입력 (선택)
     confluence_spec = ""
-    use_spec = input("\nConfluence 스펙 페이지를 참고할까요? (y/n): ").strip().lower()
-    if use_spec == "y":
+    if input("\nConfluence 스펙 페이지를 참고할까요? (y/n): ").strip().lower() == "y":
         confluence_spec = _load_confluence_specs(confluence)
 
-    # Step 3. Jira 스토리 입력 (선택)
-    use_jira = input("\nJira 스토리도 참고할까요? (y/n): ").strip().lower()
     stories = []
-    if use_jira == "y":
+    if input("\nJira 스토리도 참고할까요? (y/n): ").strip().lower() == "y":
         print("Jira Board URL 또는 JQL 입력:")
         print("예시 JQL: project = MYPROJ AND issuetype = Story AND sprint in openSprints()")
         jql_or_url = input("입력: ").strip()
@@ -721,18 +336,74 @@ def run_tc_pipeline():
             stories = jira.get_stories(jql_or_url)
             print(f"총 {len(stories)}개 스토리 조회됨")
 
+    return figma_images, confluence_spec, stories
+
+
+def _process_group(
+    group_name: str,
+    group_stories: list,
+    confluence_spec: str,
+    figma_images: list,
+    confluence: ConfluenceClient,
+    space_key: str,
+    parent_id: str,
+) -> None:
+    """그룹 하나에 대한 AI 생성 + Confluence 저장."""
+    print(f"\n[{group_name}] 처리 중...")
+    print("  AI Test Design 생성 중...")
+
+    artifacts = generate_test_design_artifacts(group_stories, confluence_spec, figma_images or None)
+    artifacts = normalize_test_design_artifacts(artifacts)
+
+    print("\n========== AI RESULT ==========")
+    print(json.dumps(artifacts, indent=2, ensure_ascii=False))
+    print("========== END ==========\n")
+
+    checklist_matrix = artifacts.get("checklist_matrix", {})
+    checklist_count = (
+        sum(len(items) for items in checklist_matrix.values())
+        if isinstance(checklist_matrix, dict)
+        else len(checklist_matrix)
+    )
+    tc_draft = artifacts.get("tc_draft", [])
+    print(f"  → Checklist {checklist_count}개 / TC Draft {len(tc_draft)}개 생성")
+
+    if input("  Confluence에 저장할까요? (y/n): ").strip().lower() != "y":
+        return
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    design_link = confluence.create_page(
+        space_key,
+        f"[Test Design] {group_name} ({now})",
+        build_test_design_page(group_name, group_stories, artifacts),
+        parent_id=parent_id,
+    )
+    tc_link = confluence.create_page(
+        space_key,
+        f"[TC Draft] {group_name} ({now})",
+        build_tc_draft_page(group_name, group_stories, artifacts),
+        parent_id=parent_id,
+    )
+
+    print(f"  ✓ Test Design 저장 완료: {design_link}")
+    print(f"  ✓ TC Draft 저장 완료: {tc_link}")
+
+
+def run_tc_pipeline():
+    print("\n=== TC 산출물 생성 ===")
+
+    jira = JiraClient()
+    confluence = ConfluenceClient()
+    space_key = os.getenv("CONFLUENCE_SPACE_KEY")
+    parent_id = os.getenv("CONFLUENCE_PARENT_PAGE_ID")
+
+    figma_images, confluence_spec, stories = _collect_inputs(jira, confluence)
+
     if not stories and not confluence_spec and not figma_images:
         print("Figma / Confluence 스펙 / Jira 스토리 중 하나는 입력해야 해요.")
         return
 
-    # Step 4. TestCollab Suite 선택 (시작 시 한 번)
-    suite_id = _select_testcollab_suite(tc_client)
-    if suite_id:
-        print(f"  TestCollab Suite ID {suite_id} → TC 생성 후 자동 업로드됩니다.")
-    else:
-        print("  TestCollab 업로드 없이 진행합니다.")
-
-    # Step 5. 스토리 있으면 AI 그룹 분류 → 그룹 선택
     if stories:
         print("\nAI가 기능 그룹 분류 중...")
         groups = classify_stories(stories)
@@ -747,10 +418,7 @@ def run_tc_pipeline():
     else:
         selected_groups = [("스펙 기반 TC", [])]
 
-    # Step 6. 그룹별 처리
     for group_name, keys in selected_groups:
-        print(f"\n[{group_name}] 처리 중...")
-
         group_stories = []
         if keys:
             key_set = set(keys)
@@ -762,59 +430,6 @@ def run_tc_pipeline():
                     print(f"  {s['key']} 조회 실패: {e}")
                     group_stories.append(s)
 
-        print("  AI Test Design 생성 중...")
-        artifacts = generate_test_design_artifacts(group_stories, confluence_spec, figma_images or None)
-        artifacts = normalize_test_design_artifacts(artifacts)
-
-        print("\n========== AI RESULT ==========")
-        print(json.dumps(artifacts, indent=2, ensure_ascii=False))
-        print("========== END ==========\n")
-
-        checklist_matrix = artifacts.get("checklist_matrix", {})
-        checklist_count = (
-            sum(len(items) for items in checklist_matrix.values())
-            if isinstance(checklist_matrix, dict)
-            else len(checklist_matrix)
-        )
-        tc_draft = artifacts.get("tc_draft", [])
-        print(f"  → Checklist {checklist_count}개 / TC Draft {len(tc_draft)}개 생성")
-
-        # Confluence 저장
-        save = input(f"  Confluence에 저장할까요? (y/n): ").strip().lower()
-        if save == "y":
-            now = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-            design_html = build_test_design_page(group_name, group_stories, artifacts)
-            design_link = confluence.create_page(
-                space_key,
-                f"[Test Design] {group_name} ({now})",
-                design_html,
-                parent_id=parent_id
-            )
-
-            tc_html = build_tc_draft_page(group_name, group_stories, artifacts)
-            tc_link = confluence.create_page(
-                space_key,
-                f"[TC Draft] {group_name} ({now})",
-                tc_html,
-                parent_id=parent_id
-            )
-
-            print(f"  ✓ Test Design 저장 완료: {design_link}")
-            print(f"  ✓ TC Draft 저장 완료: {tc_link}")
-
-            # TestCollab 업로드 (Confluence 확인 후 별도 승인)
-            if suite_id and tc_draft:
-                print(f"\n  Confluence에서 TC를 확인한 후 TestCollab에 업로드하세요.")
-                print(f"  TC Draft 링크: {tc_link}")
-                upload = input(f"  TestCollab에 업로드할까요? (y/n): ").strip().lower()
-                if upload == "y":
-                    print(f"  TestCollab 업로드 중 ({len(tc_draft)}개)...")
-                    results = tc_client.upload_tc_draft(tc_draft, suite_id)
-                    ok = sum(1 for r in results if r.get("status") == "ok")
-                    fail = len(results) - ok
-                    print(f"  ✓ TestCollab 업로드 완료: 성공 {ok}개 / 실패 {fail}개")
-                else:
-                    print("  TestCollab 업로드를 건너뜁니다.")
+        _process_group(group_name, group_stories, confluence_spec, figma_images, confluence, space_key, parent_id)
 
     print("\n=== 완료 ===")

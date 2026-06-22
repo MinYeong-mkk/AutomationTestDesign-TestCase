@@ -12,7 +12,7 @@ def get_client() -> OpenAI:
     return _client
 
 
-def chat(prompt: str, system: str = None, max_tokens: int = 4000, images: list = None) -> str:
+def chat(prompt: str, system: str = None, max_tokens: int = 4000, images: list = None, model: str = "gpt-4o") -> str:
     """OpenAI chat 호출 공통 래퍼. JSON 응답 기대 시 그대로 반환."""
     messages_content = []
 
@@ -22,14 +22,14 @@ def chat(prompt: str, system: str = None, max_tokens: int = 4000, images: list =
 
     if images:
         for img in images:
-            messages_content.append({"type": "text", "text": f"\n[화면: {img['description']} | URL: {img['url']}]"})
+            messages_content.append({"type": "text", "text": f"\n[화면: {img['description']}]"})
             messages_content.append({
                 "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{img['image']}", "detail": "low"}
+                "image_url": {"url": f"data:image/png;base64,{img['image']}", "detail": "high"}
             })
 
     response = get_client().chat.completions.create(
-        model="gpt-4o-mini",
+        model=model,
         max_tokens=max_tokens,
         response_format={"type": "json_object"},
         messages=[
@@ -46,9 +46,9 @@ def chat(prompt: str, system: str = None, max_tokens: int = 4000, images: list =
     return response.choices[0].message.content.strip()
 
 
-def chat_json(prompt: str, system: str = None, max_tokens: int = 4000, images: list = None) -> any:
+def chat_json(prompt: str, system: str = None, max_tokens: int = 4000, images: list = None, model: str = "gpt-4o") -> any:
     """JSON 응답을 파싱해서 반환"""
-    text = chat(prompt, system=system, max_tokens=max_tokens, images=images)
+    text = chat(prompt, system=system, max_tokens=max_tokens, images=images, model=model)
     text = text.replace("```json", "").replace("```", "").strip()
 
     try:
