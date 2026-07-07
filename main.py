@@ -5,8 +5,6 @@ load_dotenv()
 
 MENU = {
     "1": ("TC 산출물 생성 (Jira 스토리 / Confluence 스펙 기반)", "clients.story_tc_pipeline", "run_tc_pipeline"),
-    "2": ("KPI 대시보드 생성", "clients.kpi_dashboard", "run_kpi_dashboard"),
-    "3": ("중복 버그 탐지", "clients.duplicate_detector", "run_duplicate_detector"),
     "4": ("TestCollab TC 생성 테스트", None, None),
     "9": ("브라우저 탐색 기반 TC 생성 (추후 개발)", None, None),
 }

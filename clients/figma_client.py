@@ -1,6 +1,7 @@
 import os
 import re
 import base64
+import struct
 import requests
 
 
@@ -54,20 +55,27 @@ class FigmaClient:
         r.raise_for_status()
         return r.json()
 
-    def get_image_urls(self, file_key: str, node_ids: list) -> dict:
+    def get_image_urls(self, file_key: str, node_ids: list, scale: float = 1) -> dict:
         """노드 ID 목록 → {node_id: image_url} 렌더링 요청"""
         r = requests.get(
             f"{self.BASE_URL}/images/{file_key}",
             headers=self.headers,
-            params={"ids": ",".join(node_ids), "format": "png", "scale": 1}
+            params={"ids": ",".join(node_ids), "format": "png", "scale": scale}
         )
         r.raise_for_status()
         return r.json().get("images", {})
 
-    def download_as_base64(self, url: str) -> str:
+    def download_image(self, url: str) -> bytes:
         r = requests.get(url, timeout=30)
         r.raise_for_status()
-        return base64.b64encode(r.content).decode("utf-8")
+        return r.content
+
+    @staticmethod
+    def _png_dimensions(content: bytes) -> tuple:
+        """Pillow 없이 PNG IHDR에서 실제 (width, height)를 읽는다."""
+        if content[:8] == b"\x89PNG\r\n\x1a\n" and content[12:16] == b"IHDR":
+            return struct.unpack(">II", content[16:24])
+        return 0, 0
 
     # ── 화면 목록 조회 ────────────────────────────────────────────────────────
 
@@ -87,7 +95,23 @@ class FigmaClient:
 
     # ── 메인 진입점 ───────────────────────────────────────────────────────────
 
-    def fetch_screens(self, url_or_key: str, max_images: int = 5) -> list:
+    @staticmethod
+    def _extract_visible_text(node: dict) -> list:
+        """선택한 프레임 하위의 실제 Figma TEXT 문자열을 순서대로 추출."""
+        texts = []
+
+        def walk(current: dict) -> None:
+            if current.get("type") == "TEXT":
+                value = (current.get("characters") or "").strip()
+                if value and value not in texts:
+                    texts.append(value)
+            for child in current.get("children", []):
+                walk(child)
+
+        walk(node or {})
+        return texts
+
+    def fetch_screens(self, url_or_key: str, max_images: int = 8) -> list:
         """
         Figma URL 또는 file_key에서 화면 이미지를 가져와 base64 목록 반환.
         반환: [{description, url, image(base64)}]
@@ -136,11 +160,32 @@ class FigmaClient:
         if not nodes:
             return []
 
+        # 이미지 OCR에만 의존하지 않고 실제 TEXT 노드 문자열을 함께 확보한다.
+        visible_text_by_id = {}
+        max_dimension = 0
+        try:
+            details = self.get_node(file_key, ",".join(n["id"] for n in nodes))
+            for node_id, info in details.get("nodes", {}).items():
+                document = info.get("document", {})
+                visible_text_by_id[node_id] = self._extract_visible_text(document)
+                bounds = document.get("absoluteBoundingBox", {})
+                max_dimension = max(
+                    max_dimension,
+                    bounds.get("width", 0) or 0,
+                    bounds.get("height", 0) or 0,
+                )
+        except Exception as e:
+            print(f"  Figma TEXT 노드 조회 실패 (이미지 분석은 계속): {e}")
+
         # 이미지 렌더링 요청
         print(f"  이미지 렌더링 요청 중 ({len(nodes)}개)...")
         node_ids = [n["id"] for n in nodes]
+        # Claude는 이미지 한 변이 8,000px를 넘으면 거절한다. 여유를 두고 7,000px 이하로 렌더링한다.
+        render_scale = min(1, 7000 / max_dimension) if max_dimension else 1
+        if render_scale < 1:
+            print(f"  큰 Figma 노드 감지 — 이미지 배율을 {render_scale:.2f}로 축소")
         try:
-            image_urls = self.get_image_urls(file_key, node_ids)
+            image_urls = self.get_image_urls(file_key, node_ids, scale=render_scale)
         except Exception as e:
             print(f"  이미지 URL 요청 실패: {e}")
             return []
@@ -154,11 +199,39 @@ class FigmaClient:
                 continue
             print(f"  다운로드 중: {node['name']}")
             try:
-                b64 = self.download_as_base64(img_url)
+                image_content = self.download_image(img_url)
+                width, height = self._png_dimensions(image_content)
+                actual_max_dimension = max(width, height)
+                if actual_max_dimension > 7500:
+                    retry_scale = max(
+                        0.01,
+                        render_scale * (7000 / actual_max_dimension),
+                    )
+                    print(
+                        f"  실제 이미지 {width}x{height}px — "
+                        f"Claude용 배율 {retry_scale:.3f}로 재렌더링"
+                    )
+                    retry_urls = self.get_image_urls(
+                        file_key, [node["id"]], scale=retry_scale
+                    )
+                    retry_url = retry_urls.get(node["id"])
+                    if retry_url:
+                        image_content = self.download_image(retry_url)
+                        width, height = self._png_dimensions(image_content)
+                        if max(width, height) > 8000:
+                            raise ValueError(
+                                f"재렌더링 후에도 이미지가 {width}x{height}px입니다."
+                            )
+                b64 = base64.b64encode(image_content).decode("utf-8")
                 screens.append({
                     "description": f"[{node.get('page', '')}] {node['name']}",
+                    "node_id": node["id"],
+                    "visible_text": visible_text_by_id.get(node["id"], []),
                     "url": img_url,
-                    "image": b64
+                    "image": b64,
+                    "width": width,
+                    "height": height,
+                    "media_type": "image/png",
                 })
             except Exception as e:
                 print(f"  다운로드 실패 ({node['name']}): {e}")

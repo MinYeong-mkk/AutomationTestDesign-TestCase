@@ -1,0 +1,73 @@
+@startmindmap
+<style>
+mindmapDiagram {
+  node {
+    BackgroundColor #F8FAFC
+    FontColor #334155
+    LineColor #CBD5E1
+    FontSize 13
+    RoundCorner 14
+    Padding 10
+    Margin 6
+    MaximumWidth 180
+  }
+  rootNode {
+    BackgroundColor #334155
+    FontColor #FFFFFF
+    LineColor #1E293B
+    FontSize 18
+    RoundCorner 18
+    Padding 14
+  }
+  :depth(1) {
+    BackgroundColor #DBEAFE
+    FontColor #1E3A5F
+    LineColor #93C5FD
+    FontSize 15
+  }
+  :depth(2) {
+    BackgroundColor #ECFDF5
+    FontColor #065F46
+    LineColor #A7F3D0
+  }
+  :depth(3) {
+    BackgroundColor #FFFBEB
+    FontColor #92400E
+    LineColor #FDE68A
+  }
+  arrow {
+    LineColor #94A3B8
+    LineThickness 1.2
+  }
+}
+</style>
++ **QA Test Design**
+++ **Functional Testing**
++++ 정상 흐름
+++++ 입력 조건 검증
+++++ 처리 결과 확인
++++ 예외 흐름
+++++ 오류 메시지 확인
+++++ 재시도 및 복구
+++ **Integration Testing**
++++ API 연동
+++++ 요청 데이터 검증
+++++ 응답 상태 확인
++++ 데이터 연동
+++++ 저장 결과 확인
+++++ 동기화 상태 확인
+-- **UI/UX Testing**
+--- 화면 구성
+---- 버튼 및 필드 노출
+---- 상태별 안내 문구
+--- 사용자 조작
+---- 입력 피드백
+---- 오류 위치 표시
+-- **Quality Assurance**
+--- 성능 및 안정성
+---- 응답 시간 확인
+---- 반복 동작 안정성
+--- 호환성
+---- 브라우저별 동작
+---- 화면 크기별 배치
+@endmindmap

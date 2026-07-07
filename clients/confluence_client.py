@@ -1,5 +1,29 @@
 import os
+import re
+from html import unescape
+from html.parser import HTMLParser
 from .base_client import BaseApiClient
+
+
+class _StorageTextParser(HTMLParser):
+    BLOCK_TAGS = {"p", "div", "br", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6"}
+
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "li":
+            self.parts.append("\n- ")
+        elif tag in self.BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in self.BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_data(self, data):
+        self.parts.append(data)
 
 
 class ConfluenceClient(BaseApiClient):
@@ -12,7 +36,23 @@ class ConfluenceClient(BaseApiClient):
             f"{self.base_url}/wiki/rest/api/content/{page_id}",
             params={"expand": "body.storage"}
         )
-        return {"title": data["title"], "content": data["body"]["storage"]["value"]}
+        content = data["body"]["storage"]["value"]
+        return {
+            "title": data["title"],
+            "content": content,
+            "content_text": self.storage_to_text(content),
+        }
+
+    @staticmethod
+    def storage_to_text(content: str) -> str:
+        """Confluence storage XHTML을 AI가 읽기 쉬운 구조화 텍스트로 변환."""
+        parser = _StorageTextParser()
+        parser.feed(content or "")
+        text = unescape("".join(parser.parts))
+        text = re.sub(r"[ \t]+", " ", text)
+        text = re.sub(r" *\n *", "\n", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
 
     def get_child_pages(self, page_id: str) -> list:
         """하위 페이지 재귀 조회"""
@@ -47,6 +87,27 @@ class ConfluenceClient(BaseApiClient):
             body["ancestors"] = [{"id": parent_id}]
         data = self.post(f"{self.base_url}/wiki/rest/api/content", json=body)
         return data["_links"]["webui"]
+
+    def find_page_link(self, space_key: str, title: str, parent_id: str = None) -> str:
+        data = self.get(
+            f"{self.base_url}/wiki/rest/api/content",
+            params={
+                "spaceKey": space_key,
+                "title": title,
+                "type": "page",
+                "expand": "ancestors",
+                "limit": 25,
+            },
+        )
+        for page in data.get("results", []):
+            if page.get("title") != title:
+                continue
+            if parent_id:
+                ancestors = page.get("ancestors", [])
+                if not any(str(item.get("id")) == str(parent_id) for item in ancestors):
+                    continue
+            return page.get("_links", {}).get("webui", "")
+        return ""
 
     def _extract_page_id(self, url: str) -> str:
         parts = url.split("/pages/")
